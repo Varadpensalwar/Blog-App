@@ -1,15 +1,7 @@
 import { Alert, Button, Modal, ModalBody, TextInput } from 'flowbite-react';
 import { useEffect, useRef, useState } from 'react';
 import { useSelector } from 'react-redux';
-import {
-  getDownloadURL,
-  getStorage,
-  ref,
-  uploadBytesResumable,
-} from 'firebase/storage';
-import { app } from '../firebase';
-import { CircularProgressbar } from 'react-circular-progressbar';
-import 'react-circular-progressbar/dist/styles.css';
+import { Client, Storage, ID } from 'appwrite';
 import {
   updateStart,
   updateSuccess,
@@ -22,6 +14,17 @@ import {
 import { useDispatch } from 'react-redux';
 import { HiOutlineExclamationCircle } from 'react-icons/hi';
 import { Link } from 'react-router-dom';
+import { CircularProgressbar } from 'react-circular-progressbar';
+import 'react-circular-progressbar/dist/styles.css';
+
+// Initialize Appwrite client (you can also move this to a separate file)
+const client = new Client();
+client
+  .setEndpoint('https://cloud.appwrite.io/v1') // Your Appwrite endpoint
+  .setProject('67fcc76e00070d7c5244'); // Your project ID from Appwrite console
+
+const storage = new Storage(client);
+const BUCKET_ID = '67fcc859000c33e6b9fa'; // Your storage bucket ID from Appwrite console
 
 export default function DashProfile() {
   const { currentUser, error, loading } = useSelector((state) => state.user);
@@ -36,6 +39,7 @@ export default function DashProfile() {
   const [formData, setFormData] = useState({});
   const filePickerRef = useRef();
   const dispatch = useDispatch();
+
   const handleImageChange = (e) => {
     const file = e.target.files[0];
     if (file) {
@@ -43,6 +47,7 @@ export default function DashProfile() {
       setImageFileUrl(URL.createObjectURL(file));
     }
   };
+
   useEffect(() => {
     if (imageFile) {
       uploadImage();
@@ -50,47 +55,68 @@ export default function DashProfile() {
   }, [imageFile]);
 
   const uploadImage = async () => {
-    // service firebase.storage {
-    //   match /b/{bucket}/o {
-    //     match /{allPaths=**} {
-    //       allow read;
-    //       allow write: if
-    //       request.resource.size < 2 * 1024 * 1024 &&
-    //       request.resource.contentType.matches('image/.*')
-    //     }
-    //   }
-    // }
     setImageFileUploading(true);
     setImageFileUploadError(null);
-    const storage = getStorage(app);
-    const fileName = new Date().getTime() + imageFile.name;
-    const storageRef = ref(storage, fileName);
-    const uploadTask = uploadBytesResumable(storageRef, imageFile);
-    uploadTask.on(
-      'state_changed',
-      (snapshot) => {
-        const progress =
-          (snapshot.bytesTransferred / snapshot.totalBytes) * 100;
-
-        setImageFileUploadProgress(progress.toFixed(0));
-      },
-      (error) => {
-        setImageFileUploadError(
-          'Could not upload image (File must be less than 2MB)'
-        );
-        setImageFileUploadProgress(null);
-        setImageFile(null);
-        setImageFileUrl(null);
-        setImageFileUploading(false);
-      },
-      () => {
-        getDownloadURL(uploadTask.snapshot.ref).then((downloadURL) => {
-          setImageFileUrl(downloadURL);
-          setFormData({ ...formData, profilePicture: downloadURL });
-          setImageFileUploading(false);
+    setImageFileUploadProgress(0);
+    
+    try {
+      const fileName = `${new Date().getTime()}_${imageFile.name}`;
+      
+      // Create a promise to track upload progress
+      const uploadPromise = new Promise((resolve, reject) => {
+        // Set up an interval to simulate progress (Appwrite doesn't provide native progress)
+        const progressInterval = setInterval(() => {
+          setImageFileUploadProgress((prev) => {
+            if (prev >= 90) {
+              clearInterval(progressInterval);
+              return 90;
+            }
+            return prev + 10;
+          });
+        }, 500);
+        
+        // Upload the file to Appwrite
+        storage.createFile(
+          BUCKET_ID,
+          ID.unique(),
+          imageFile
+        ).then(response => {
+          clearInterval(progressInterval);
+          setImageFileUploadProgress(100);
+          resolve(response);
+        }).catch(error => {
+          clearInterval(progressInterval);
+          reject(error);
         });
-      }
-    );
+      });
+      
+      // Wait for upload to complete
+      const fileData = await uploadPromise;
+      
+      // Get the file preview URL (this creates a URL you can use to display the image)
+      const fileUrl = storage.getFilePreview(
+        BUCKET_ID,
+        fileData.$id,
+        2000, // width
+        2000, // height
+        'center', // gravity
+        100 // quality
+      );
+      
+      setImageFileUrl(fileUrl.href);
+      setFormData({ ...formData, profilePicture: fileUrl.href });
+      setImageFileUploading(false);
+      
+    } catch (error) {
+      console.error('Image upload error:', error);
+      setImageFileUploadError(
+        'Could not upload image (File must be less than 5MB)'
+      );
+      setImageFileUploadProgress(null);
+      setImageFile(null);
+      setImageFileUrl(null);
+      setImageFileUploading(false);
+    }
   };
 
   const handleChange = (e) => {
@@ -131,6 +157,7 @@ export default function DashProfile() {
       setUpdateUserError(error.message);
     }
   };
+
   const handleDeleteUser = async () => {
     setShowModal(false);
     try {
@@ -164,6 +191,7 @@ export default function DashProfile() {
       console.log(error.message);
     }
   };
+
   return (
     <div className='max-w-lg mx-auto p-3 w-full'>
       <h1 className='my-7 text-center font-semibold text-3xl'>Profile</h1>
