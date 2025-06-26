@@ -103,7 +103,6 @@ npm start
 ## Demo
 
 - **Video Demo**: [Varad'sBlog.mp4](./Varad'sBlog.mp4)
-- **Video Proof**: [Google Drive Link](https://drive.google.com/file/d/1W2B7jTEYEJc5ElM0EA2zIZQZbySGOncK/view?usp=drive_link)
 
 ## Contributing
 
