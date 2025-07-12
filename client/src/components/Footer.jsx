@@ -22,7 +22,7 @@ export default function FooterCom() {
               <Footer.Title title='About' />
               <Footer.LinkGroup col>
                 <Footer.Link
-                  href='https://www.100jsprojects.com'
+                  href='https://varadpensalwar.vercel.app'
                   target='_blank'
                   rel='noopener noreferrer'
                 >
